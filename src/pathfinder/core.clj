@@ -16,27 +16,39 @@
    :g [[25 6] [29 8] [31 6] [31 2] [28 1] [25 2]]
    :h [[29 17] [31 19] [34 16] [32 8]]})
 
-(defn distance [vert-a vert-b]
-  (math/sqrt (reduce + (map (fn [x] (math/expt x 2)) (map - vert-a vert-b)))))
+(defn shape-verts []
+  (reduce-kv (fn [m k v] (conj m (map (fn [x] [k x]) v))) [] shapes))
 
-(defn create-edge [vert-a vert-b]
-  {:from vert-a :to vert-b :dist (distance vert-a vert-b)})
+(defn distance [vert-a vert-b]
+  (math/sqrt (reduce + (map #(math/expt % 2) (map - vert-a vert-b)))))
+
+(defn create-edge [[_ vert-a :as a] [_ vert-b :as b]]
+  {:from a :to b :dist (distance vert-a vert-b)})
 
 (defn neighboring-edges [verts]
-  (concat
-    (map create-edge verts (rotate 1 verts))
-    (map create-edge verts (rotate -1 verts))))
-
-(defn build-edges [shapes]
-  (flatten (map neighboring-edges (vals shapes))))
+  (map create-edge verts (rotate 1 verts)))
 
 (defn ccw [[ax ay] [bx by] [cx cy]]
   (> (* (- cy ay) (- bx ax))
      (* (- by ay) (- cx ax))))
 
-(defn intersect [a b c d]
+(defn intersecting? [a b c d]
   (and (not= (ccw a c d) (ccw b c d))
-       (not= (ccw a b c) (ccw a b d))))
+       (not= (ccw a b c) (ccw a b d))
+       (and (distinct? a b c d))))
 
-(def start [1 3])
-(def goal [34 19])
+(def start [:start [1 3]])
+(def goal [:goal [34 19]])
+
+(defn obstacle-edges []
+  (flatten (map neighboring-edges (shape-verts))))
+
+(defn attempted-edges [vertex]
+  (map #(create-edge vertex %) (apply concat (shape-verts))))
+
+(defn visible? [{[_ a] :from [_ b] :to}]
+  (not-any? (fn [{[_ c] :from [_ d] :to}] (intersecting? a b c d)) (obstacle-edges)))
+
+(defn get-visible-vertices [vertex]
+  (->> (attempted-edges vertex)
+       (filter visible?)))
