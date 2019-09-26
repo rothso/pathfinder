@@ -1,5 +1,6 @@
 (ns pathfinder.core
-  (:require [clojure.math.numeric-tower :as math]))
+  (:require [clojure.math.numeric-tower :as math])
+  (:require [clojure.set :as set]))
 
 (defn rotate [n a]
   (let [l (count a)
@@ -16,6 +17,9 @@
    :g [[25 6] [29 8] [31 6] [31 2] [28 1] [25 2]]
    :h [[29 17] [31 19] [34 16] [32 8]]})
 
+(def start [:start [1 3]])
+(def goal [:goal [34 19]])
+
 (defn shape-verts []
   (reduce-kv (fn [m k v] (conj m (map (fn [x] [k x]) v))) [] shapes))
 
@@ -24,6 +28,9 @@
 
 (defn create-edge [[_ vert-a :as a] [_ vert-b :as b]]
   {:from a :to b :dist (distance vert-a vert-b)})
+
+(defn flip [edge]
+  (set/rename-keys edge {:from :to, :to :from}))
 
 (defn neighboring-edges [verts]
   (map create-edge verts (rotate 1 verts)))
@@ -37,18 +44,21 @@
        (not= (ccw a b c) (ccw a b d))
        (and (distinct? a b c d))))
 
-(def start [:start [1 3]])
-(def goal [:goal [34 19]])
-
 (defn obstacle-edges []
-  (flatten (map neighboring-edges (shape-verts))))
+  (set (flatten (map neighboring-edges (shape-verts)))))
 
-(defn attempted-edges [vertex]
+(defn potential-edges [vertex]
   (map #(create-edge vertex %) (apply concat (shape-verts))))
 
 (defn visible? [{[_ a] :from [_ b] :to}]
   (not-any? (fn [{[_ c] :from [_ d] :to}] (intersecting? a b c d)) (obstacle-edges)))
 
+(defn valid-edge? [{[from] :from [to] :to :as edge}]
+  (or (not= from to)
+      (contains? (obstacle-edges) edge)
+      (contains? (obstacle-edges) (flip edge))))
+
 (defn get-visible-vertices [vertex]
-  (->> (attempted-edges vertex)
+  (->> (potential-edges vertex)
+       (filter valid-edge?)
        (filter visible?)))
