@@ -75,26 +75,30 @@
 (defn h [n]
   (distance (second n) (second goal)))
 
+(defn g [current-travelled from to]
+  (+ current-travelled (distance (second from) (second to))))
+
 (defn A* []
   (loop [open-list (priority-map start (h start))
          closed-list #{}
-         came-from []
+         came-from {}
          g-score (assoc (zipmap (search-space) (repeat ##Inf)) start 0)]
     (when (not (empty? open-list))
-      (let [g (fn [from to] (+ (get g-score from) (distance (second from) (second to))))
-            current (key (peek open-list))
+      (let [current (key (peek open-list))
             neighbors (filter #(not (contains? closed-list (:to %))) (get-visible-vertices current))
-            g-score' (->> neighbors
-                          (map #(g current %))
+            g-score' (->> neighbors                         ;; get improved g-scores of neighbors
+                          (map #(g (get g-score current) current %))
                           (zipmap neighbors)
                           (filter #(< (val %) (g-score (key %))))
                           (into {}))
             f-score' (update-map #(+ %2 (h %1)) g-score')]
-        (println current)
         (if (= goal current)
-          "hello"                                           ;; todo
+          (loop [current goal path []]
+            (if (= current start)
+              (reverse path)
+              (recur (get came-from current) (conj path current))))
           (recur
             (into (pop open-list) f-score')                 ;; add improved neighbors to open list
             (conj closed-list current)                      ;; add current vertex to the closed list
-            came-from
-            (merge-with min g-score g-score')))))))         ;; update the g-scores with the minimum
+            (merge came-from (zipmap (keys g-score') (repeat current))) ;; update path to neighbor
+            (merge-with min g-score g-score')))))))         ;; update the g-scores with best scores
