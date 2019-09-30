@@ -72,7 +72,7 @@
   (->> (potential-edges vertex)
        (filter valid-edge?)
        (filter visible?)
-       (map #(:to %))))
+       (map :to)))
 
 (defn h [n]
   (distance (second n) (second goal)))
@@ -87,7 +87,7 @@
          g-score (assoc (zipmap (search-space) (repeat ##Inf)) start 0)]
     (when (not (empty? open-list))
       (let [current (key (peek open-list))
-            neighbors (filter #(not (contains? closed-list (:to %))) (get-visible-vertices current))
+            neighbors (filter (comp not (partial contains? closed-list)) (get-visible-vertices current))
             g-score' (->> neighbors                         ;; get improved g-scores of neighbors
                           (map #(g (get g-score current) current %))
                           (zipmap neighbors)
