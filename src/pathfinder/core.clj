@@ -2,7 +2,8 @@
   (:require [clojure.math.numeric-tower :as math])
   (:require [clojure.set :as set])
   (:require [clojure.data.priority-map :refer [priority-map]])
-  (:require [quil.core :as q]))
+  (:require [quil.core :as q])
+  (:gen-class))
 
 (defn rotate [n a]
   (let [l (count a)
@@ -132,12 +133,13 @@
         (apply q/vertex (scale x y)))
       (q/end-shape))))
 
-(q/defsketch pathfinding
-             :title "Assignment 1"
-             :host "host"
-             :size [800 400]
-             :renderer :p2d
-             :draw draw)
-
-;; print the A* path to the console
-(doall (map println (A*)))
+(defn -main []
+  ;; print the A* path to the console
+  (doall (map println (A*)))
+  ;; draw the A* path using quil
+  (q/sketch
+    :title "Assignment 1"
+    :size [800 400]
+    :renderer :p2d
+    :draw draw
+    :features [:exit-on-close]))

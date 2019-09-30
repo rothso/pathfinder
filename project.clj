@@ -8,4 +8,6 @@
                  [org.clojure/math.combinatorics "0.1.6"]
                  [org.clojure/data.priority-map "0.0.10"]
                  [quil "3.0.0"]]
+  :aot [pathfinder.core]
+  :main pathfinder.core
   :repl-options {:init-ns pathfinder.core})
