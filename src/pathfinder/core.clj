@@ -1,7 +1,8 @@
 (ns pathfinder.core
   (:require [clojure.math.numeric-tower :as math])
   (:require [clojure.set :as set])
-  (:require [clojure.data.priority-map :refer [priority-map]]))
+  (:require [clojure.data.priority-map :refer [priority-map]])
+  (:require [quil.core :as q]))
 
 (defn rotate [n a]
   (let [l (count a)
@@ -16,10 +17,10 @@
   {:a [[2 6] [17 6] [17 1] [2 1]]
    :b [[0 14] [6 19] [9 15] [7 8] [1 9]]
    :c [[10 8] [12 15] [14 8]]
-   :d [[14 19] [18 20] [20 17] [14 13]]
+   :d [[14 19] [18 20] [21 17] [14 13]]
    :e [[18 10] [23 6] [19 3]]
    :f [[22 19] [28 19] [28 9] [22 9]]
-   :g [[25 6] [29 8] [31 6] [31 2] [28 1] [25 2]]
+   :g [[25 6] [28 8] [31 6] [31 2] [28 1] [25 2]]
    :h [[29 17] [31 19] [34 16] [32 8]]})
 
 (def start [:start [1 3]])
@@ -94,7 +95,7 @@
             f-score' (update-map #(+ %2 (h %1)) g-score')]
         (if (= goal current)
           (loop [current goal path []]
-            (if (= current start)
+            (if (= current nil)
               (reverse path)
               (recur (get came-from current) (conj path current))))
           (recur
@@ -102,3 +103,41 @@
             (conj closed-list current)                      ;; add current vertex to the closed list
             (merge came-from (zipmap (keys g-score') (repeat current))) ;; update path to neighbor
             (merge-with min g-score g-score')))))))         ;; update the g-scores with best scores
+
+(defn scale [x y]
+  [(* x 20) (- (q/height) (* y 20))])
+
+(defn draw []
+  (let [[start-x start-y] (second start)
+        [goal-x goal-y] (second goal)
+        path (A*)]
+    (q/with-translation
+      [50 5]
+      (q/background 255)
+      (q/stroke 0 0 0)
+      (q/stroke-weight 2)
+      (doseq [shape (vals shapes)]                          ;; draw each obstacle
+        (q/begin-shape)
+        (doseq [[x y] shape]
+          (apply q/vertex (scale x y)))
+        (q/end-shape :close))
+      (q/stroke 255 0 0)
+      (q/stroke-weight 10)
+      (apply q/point (scale start-x start-y))               ;; draw start point
+      (apply q/point (scale goal-x goal-y))                 ;; draw goal point
+      (q/stroke-weight 2)
+      (q/no-fill)
+      (q/begin-shape)                                       ;; draw A* path
+      (doseq [[_ [x y]] path]
+        (apply q/vertex (scale x y)))
+      (q/end-shape))))
+
+(q/defsketch pathfinding
+             :title "Assignment 1"
+             :host "host"
+             :size [800 400]
+             :renderer :p2d
+             :draw draw)
+
+;; print the A* path to the console
+(doall (map println (A*)))
