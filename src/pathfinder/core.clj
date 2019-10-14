@@ -1,7 +1,7 @@
 (ns pathfinder.core
   (:require [clojure.math.numeric-tower :as math])
   (:require [clojure.set :as set])
-  (:require [clojure.data.priority-map :refer [priority-map]])
+  (:require [clojure.data.priority-map :refer [priority-map, priority-map-by]])
   (:require [quil.core :as q])
   (:gen-class))
 
@@ -105,13 +105,44 @@
             (merge came-from (zipmap (keys g-score') (repeat current))) ;; update path to neighbor
             (merge-with min g-score g-score')))))))         ;; update the g-scores with best scores
 
+(defn u [c g-score h-score]
+  (if (= h-score 0) ##Inf (/ (- c g-score) h-score)))
+
+(defn potential-search [cost]
+  (loop [open-list (priority-map-by > start (u cost 0 (h start)))
+         closed-list #{}
+         came-from {}
+         g-score (assoc (zipmap (search-space) (repeat ##Inf)) start 0)]
+    (when (not (empty? open-list))
+      (let [current (key (peek open-list))
+            neighbors (filter (comp not (partial contains? closed-list)) (get-visible-vertices current))
+            g-score' (->> neighbors                         ;; get improved g-scores of neighbors
+                          (map #(g (get g-score current) current %))
+                          (zipmap neighbors)
+                          (filter #(< (val %) (g-score (key %))))
+                          (into {}))
+            u-score' (update-map #(u cost %2 (h %1)) g-score')]
+        (if (= goal current)                                ;; TODO fix: check if current >= 0
+          (loop [current goal path []]
+            (if (= current nil)
+              (reverse path)
+              (recur (get came-from current) (conj path current))))
+          (recur
+            (into (pop open-list) u-score')                 ;; add improved neighbors to open list
+            (conj closed-list current)                      ;; add current vertex to the closed list
+            (merge came-from (zipmap (keys g-score') (repeat current))) ;; update path to neighbor
+            (merge-with min g-score g-score')))))))         ;; update the g-scores with best scores
+
 (defn scale [x y]
   [(* x 20) (- (q/height) (* y 20))])
+
+(def path
+  (potential-search 200))
 
 (defn draw []
   (let [[start-x start-y] (second start)
         [goal-x goal-y] (second goal)
-        path (A*)]
+        path path]
     (q/with-translation
       [50 5]
       (q/background 255)
@@ -135,7 +166,7 @@
 
 (defn -main []
   ;; print the A* path to the console
-  (doall (map println (A*)))
+  (doall (map println path))
   ;; draw the A* path using quil
   (q/sketch
     :title "Assignment 1"
