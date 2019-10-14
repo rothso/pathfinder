@@ -54,10 +54,10 @@
 
 (defn get-visible-vertices [shapes goal vertex]
   (let [obstacle-edges (obstacle-edges shapes)]
-   (->> (map #(create-edge vertex %) (search-space shapes goal))
-        (filter (partial valid-edge? obstacle-edges))       ;; not going through the shape
-        (filter (partial visible? obstacle-edges))          ;; not going through other shapes
-        (map :to))))
+    (->> (map #(create-edge vertex %) (search-space shapes goal))
+         (filter (partial valid-edge? obstacle-edges))      ;; not going through the shape
+         (filter (partial visible? obstacle-edges))         ;; not going through other shapes
+         (map :to))))
 
 (defn h [n goal]
   (distance (second n) (second goal)))
@@ -150,6 +150,11 @@
         (apply q/vertex (scale x y)))
       (q/end-shape))))
 
+(defn prompt-read [prompt]
+  (print (format "%s: " prompt))
+  (flush)
+  (read-line))
+
 (defn -main []
   (let [shapes {:a [[2 6] [17 6] [17 1] [2 1]]
                 :b [[0 14] [6 19] [9 15] [7 8] [1 9]]
@@ -161,7 +166,8 @@
                 :h [[29 17] [31 19] [34 16] [32 8]]}
         start [:start [1 3]]
         goal [:goal [34 19]]
-        path (potential-search shapes start goal 100)]
+        cost (Integer/parseInt (prompt-read "Enter the cost (C)"))
+        path (potential-search shapes start goal cost)]
     (if (nil? path)
       (println "No path found")
       (do
