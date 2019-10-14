@@ -122,27 +122,24 @@
                           (filter #(< (val %) (g-score (key %))))
                           (into {}))
             u-score' (update-map #(u cost %2 (h %1)) g-score')]
-        (if (= goal current)                                ;; TODO fix: check if current >= 0
-          (loop [current goal path []]
-            (if (= current nil)
-              (reverse path)
-              (recur (get came-from current) (conj path current))))
-          (recur
-            (into (pop open-list) u-score')                 ;; add improved neighbors to open list
-            (conj closed-list current)                      ;; add current vertex to the closed list
-            (merge came-from (zipmap (keys g-score') (repeat current))) ;; update path to neighbor
-            (merge-with min g-score g-score')))))))         ;; update the g-scores with best scores
+        (if (>= (val (peek open-list)) 0)                    ;; u(n) < 0, no path found, return nil
+          (if (= goal current)
+            (loop [current goal path []]
+              (if (= current nil)
+                (reverse path)
+                (recur (get came-from current) (conj path current))))
+            (recur
+              (into (pop open-list) u-score')               ;; add improved neighbors to open list
+              (conj closed-list current)                    ;; add current vertex to the closed list
+              (merge came-from (zipmap (keys g-score') (repeat current))) ;; update path to neighbor
+              (merge-with min g-score g-score'))))))))      ;; update the g-scores with best scores
 
 (defn scale [x y]
   [(* x 20) (- (q/height) (* y 20))])
 
-(def path
-  (potential-search 200))
-
-(defn draw []
+(defn draw [path]
   (let [[start-x start-y] (second start)
-        [goal-x goal-y] (second goal)
-        path path]
+        [goal-x goal-y] (second goal)]
     (q/with-translation
       [50 5]
       (q/background 255)
@@ -165,12 +162,16 @@
       (q/end-shape))))
 
 (defn -main []
-  ;; print the A* path to the console
-  (doall (map println path))
-  ;; draw the A* path using quil
-  (q/sketch
-    :title "Assignment 1"
-    :size [800 400]
-    :renderer :p2d
-    :draw draw
-    :features [:exit-on-close]))
+  (let [path (potential-search 30)]
+   (if (nil? path)
+     (println "No path found")
+     (do
+       ;; print the A* path to the console
+       (doall (map println path))
+       ;; draw the A* path using quil
+       (q/sketch
+         :title "Assignment 1"
+         :size [800 400]
+         :renderer :p2d
+         :draw #(draw path)
+         :features [:exit-on-close])))))
