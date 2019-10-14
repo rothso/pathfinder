@@ -14,22 +14,6 @@
   (reduce-kv (fn [m k v]
                (assoc m k (f k v))) {} m))
 
-(def shapes
-  {:a [[2 6] [17 6] [17 1] [2 1]]
-   :b [[0 14] [6 19] [9 15] [7 8] [1 9]]
-   :c [[10 8] [12 15] [14 8]]
-   :d [[14 19] [18 20] [21 17] [14 13]]
-   :e [[18 10] [23 6] [19 3]]
-   :f [[22 19] [28 19] [28 9] [22 9]]
-   :g [[25 6] [28 8] [31 6] [31 2] [28 1] [25 2]]
-   :h [[29 17] [31 19] [34 16] [32 8]]})
-
-(def start [:start [1 3]])
-(def goal [:goal [34 19]])
-
-(defn shape-verts []
-  (reduce-kv (fn [m k v] (conj m (map (fn [x] [k x]) v))) [] shapes))
-
 (defn distance [vert-a vert-b]
   (math/sqrt (reduce + (map #(math/expt % 2) (map - vert-a vert-b)))))
 
@@ -51,49 +35,52 @@
        (not= (ccw a b c) (ccw a b d))
        (and (distinct? a b c d))))
 
-(defn obstacle-edges []
-  (set (flatten (map neighboring-edges (shape-verts)))))
+(defn shape-verts [shapes]
+  (reduce-kv (fn [m k v] (conj m (map (fn [x] [k x]) v))) [] shapes))
 
-(defn search-space []
-  (conj (apply concat (shape-verts)) goal))
+(defn obstacle-edges [shapes]
+  (set (flatten (map neighboring-edges (shape-verts shapes)))))
 
-(defn potential-edges [vertex]
-  (map #(create-edge vertex %) (search-space)))
+(defn search-space [shapes goal]
+  (conj (apply concat (shape-verts shapes)) goal))
 
-(defn visible? [{[_ a] :from [_ b] :to}]
-  (not-any? (fn [{[_ c] :from [_ d] :to}] (intersecting? a b c d)) (obstacle-edges)))
+(defn visible? [obstacle-edges {[_ a] :from [_ b] :to}]
+  (not-any? (fn [{[_ c] :from [_ d] :to}] (intersecting? a b c d)) obstacle-edges))
 
-(defn valid-edge? [{[from] :from [to] :to :as edge}]
-  (or (not= from to)
-      (contains? (obstacle-edges) edge)
-      (contains? (obstacle-edges) (flip edge))))
+(defn valid-edge? [obstacle-edges {[from] :from [to] :to :as edge}]
+  (or (not= from to)                                        ;; going to different shape
+      (contains? obstacle-edges edge)                       ;; adjacent on the same shape
+      (contains? obstacle-edges (flip edge))))              ;; adjacent on the same shape
 
-(defn get-visible-vertices [vertex]
-  (->> (potential-edges vertex)
-       (filter valid-edge?)
-       (filter visible?)
-       (map :to)))
+(defn get-visible-vertices [shapes goal vertex]
+  (let [obstacle-edges (obstacle-edges shapes)]
+   (->> (map #(create-edge vertex %) (search-space shapes goal))
+        (filter (partial valid-edge? obstacle-edges))       ;; not going through the shape
+        (filter (partial visible? obstacle-edges))          ;; not going through other shapes
+        (map :to))))
 
-(defn h [n]
+(defn h [n goal]
   (distance (second n) (second goal)))
 
 (defn g [current-travelled from to]
   (+ current-travelled (distance (second from) (second to))))
 
-(defn A* []
-  (loop [open-list (priority-map start (h start))
+(defn A* [shapes start goal]
+  (loop [open-list (priority-map start (h start goal))
          closed-list #{}
          came-from {}
-         g-score (assoc (zipmap (search-space) (repeat ##Inf)) start 0)]
+         g-score (assoc (zipmap (search-space shapes goal) (repeat ##Inf)) start 0)]
     (when (not (empty? open-list))
       (let [current (key (peek open-list))
-            neighbors (filter (comp not (partial contains? closed-list)) (get-visible-vertices current))
+            neighbors (->> current                          ;; get all unvisited neighbors
+                           (get-visible-vertices shapes goal)
+                           (filter (comp not (partial contains? closed-list))))
             g-score' (->> neighbors                         ;; get improved g-scores of neighbors
                           (map #(g (get g-score current) current %))
                           (zipmap neighbors)
                           (filter #(< (val %) (g-score (key %))))
                           (into {}))
-            f-score' (update-map #(+ %2 (h %1)) g-score')]
+            f-score' (update-map #(+ %2 (h %1 goal)) g-score')]
         (if (= goal current)
           (loop [current goal path []]
             (if (= current nil)
@@ -108,21 +95,23 @@
 (defn u [c g-score h-score]
   (if (= h-score 0) ##Inf (/ (- c g-score) h-score)))
 
-(defn potential-search [cost]
-  (loop [open-list (priority-map-by > start (u cost 0 (h start)))
+(defn potential-search [shapes start goal cost]
+  (loop [open-list (priority-map-by > start (u cost 0 (h start goal)))
          closed-list #{}
          came-from {}
-         g-score (assoc (zipmap (search-space) (repeat ##Inf)) start 0)]
+         g-score (assoc (zipmap (search-space shapes goal) (repeat ##Inf)) start 0)]
     (when (not (empty? open-list))
       (let [current (key (peek open-list))
-            neighbors (filter (comp not (partial contains? closed-list)) (get-visible-vertices current))
+            neighbors (->> current                          ;; get all unvisited neighbors
+                           (get-visible-vertices shapes goal)
+                           (filter (comp not (partial contains? closed-list))))
             g-score' (->> neighbors                         ;; get improved g-scores of neighbors
                           (map #(g (get g-score current) current %))
                           (zipmap neighbors)
                           (filter #(< (val %) (g-score (key %))))
                           (into {}))
-            u-score' (update-map #(u cost %2 (h %1)) g-score')]
-        (if (>= (val (peek open-list)) 0)                    ;; u(n) < 0, no path found, return nil
+            u-score' (update-map #(u cost %2 (h %1 goal)) g-score')]
+        (if (>= (val (peek open-list)) 0)                   ;; u(n) < 0, no path found, return nil
           (if (= goal current)
             (loop [current goal path []]
               (if (= current nil)
@@ -137,7 +126,7 @@
 (defn scale [x y]
   [(* x 20) (- (q/height) (* y 20))])
 
-(defn draw [path]
+(defn draw [shapes start goal path]
   (let [[start-x start-y] (second start)
         [goal-x goal-y] (second goal)]
     (q/with-translation
@@ -156,22 +145,32 @@
       (apply q/point (scale goal-x goal-y))                 ;; draw goal point
       (q/stroke-weight 2)
       (q/no-fill)
-      (q/begin-shape)                                       ;; draw A* path
+      (q/begin-shape)                                       ;; draw search path
       (doseq [[_ [x y]] path]
         (apply q/vertex (scale x y)))
       (q/end-shape))))
 
 (defn -main []
-  (let [path (potential-search 30)]
-   (if (nil? path)
-     (println "No path found")
-     (do
-       ;; print the A* path to the console
-       (doall (map println path))
-       ;; draw the A* path using quil
-       (q/sketch
-         :title "Assignment 1"
-         :size [800 400]
-         :renderer :p2d
-         :draw #(draw path)
-         :features [:exit-on-close])))))
+  (let [shapes {:a [[2 6] [17 6] [17 1] [2 1]]
+                :b [[0 14] [6 19] [9 15] [7 8] [1 9]]
+                :c [[10 8] [12 15] [14 8]]
+                :d [[14 19] [18 20] [21 17] [14 13]]
+                :e [[18 10] [23 6] [19 3]]
+                :f [[22 19] [28 19] [28 9] [22 9]]
+                :g [[25 6] [28 8] [31 6] [31 2] [28 1] [25 2]]
+                :h [[29 17] [31 19] [34 16] [32 8]]}
+        start [:start [1 3]]
+        goal [:goal [34 19]]
+        path (potential-search shapes start goal 100)]
+    (if (nil? path)
+      (println "No path found")
+      (do
+        ;; print the search path to the console
+        (doall (map println path))
+        ;; draw the search path using quil
+        (q/sketch
+          :title "Assignment 2"
+          :size [800 400]
+          :renderer :p2d
+          :draw #(draw shapes start goal path)
+          :features [:exit-on-close])))))
