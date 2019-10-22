@@ -155,17 +155,29 @@
   (flush)
   (read-line))
 
-(defn -main []
-  (let [shapes {:a [[2 6] [17 6] [17 1] [2 1]]
-                :b [[0 14] [6 19] [9 15] [7 8] [1 9]]
-                :c [[10 8] [12 15] [14 8]]
-                :d [[14 19] [18 20] [21 17] [14 13]]
-                :e [[18 10] [23 6] [19 3]]
-                :f [[22 19] [28 19] [28 9] [22 9]]
-                :g [[25 6] [28 8] [31 6] [31 2] [28 1] [25 2]]
-                :h [[29 17] [31 19] [34 16] [32 8]]}
-        start [:start [1 3]]
-        goal [:goal [34 19]]
+(def environments
+  [{:shapes {:a [[2 6] [17 6] [17 1] [2 1]]
+             :b [[0 14] [6 19] [9 15] [7 8] [1 9]]
+             :c [[10 8] [12 15] [14 8]]
+             :d [[14 19] [18 20] [21 17] [14 13]]
+             :e [[18 10] [23 6] [19 3]]
+             :f [[22 19] [28 19] [28 9] [22 9]]
+             :g [[25 6] [28 8] [31 6] [31 2] [28 1] [25 2]]
+             :h [[29 17] [31 19] [34 16] [32 8]]}
+    :start  [:start [1 3]]
+    :goal   [:goal [34 19]]},
+   {:shapes {:a [[12 4] [18 4] [15 6]]
+             :b [[8 4] [15 8] [22 4] [22 10] [8 10]]
+             :c [[3 7] [6 7] [3 10] [6 10]]
+             :d [[3 14] [12 14] [12 16] [3 16]]
+             :e [[15 14] [26 14] [30 18] [19 18]]}
+    :start  [:start [15 1]]
+    :goal   [:goal [15 18]]}])
+
+(defn process [choice]
+  (let [{shapes :shapes
+         start  :start
+         goal   :goal} (nth environments choice)
         cost (Integer/parseInt (prompt-read "Enter the cost (C)"))
         path (potential-search shapes start goal cost)]
     (if (nil? path)
@@ -178,5 +190,12 @@
           :title "Assignment 2"
           :size [800 400]
           :renderer :p2d
-          :draw #(draw shapes start goal path)
-          :features [:exit-on-close])))))
+          :draw #(draw shapes start goal path))))))
+
+(defn -main []
+  (loop []
+    (let [prompt "Select an environment (1-2) or -1 to quit"
+          choice (Integer/parseInt (prompt-read prompt))]
+      (cond (<= 1 choice 2) (do (process (- choice 1)) (recur))
+            (= choice -1) (println "Goodbye!")
+            :else (recur)))))
