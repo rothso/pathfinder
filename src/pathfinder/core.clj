@@ -177,7 +177,7 @@
 (defn process [choice]
   (let [{shapes :shapes
          start  :start
-         goal   :goal} (nth environments choice)
+         goal   :goal} (nth environments (- choice 1))
         cost (Integer/parseInt (prompt-read "Enter the cost (C)"))
         path (potential-search shapes start goal cost)]
     (if (nil? path)
@@ -187,15 +187,16 @@
         (doall (map println path))
         ;; draw the search path using quil
         (q/sketch
-          :title "Assignment 2"
+          :title (str "Environment " choice)
           :size [800 400]
           :renderer :p2d
-          :draw #(draw shapes start goal path))))))
+          :draw #(do (draw shapes start goal path)
+                     (q/save (str "PTS_Rothanak_So_" choice ".png"))))))))
 
 (defn -main []
   (loop []
     (let [prompt "Select an environment (1-2) or -1 to quit"
           choice (Integer/parseInt (prompt-read prompt))]
-      (cond (<= 1 choice 2) (do (process (- choice 1)) (recur))
+      (cond (<= 1 choice 2) (do (process choice) (recur))
             (= choice -1) (println "Goodbye!")
             :else (recur)))))
