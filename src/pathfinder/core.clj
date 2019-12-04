@@ -1,7 +1,8 @@
 (ns pathfinder.core
+  (:require [clojure.data.priority-map :refer [priority-map, priority-map-by]])
+  (:require [clojure.edn :as edn])
   (:require [clojure.math.numeric-tower :as math])
   (:require [clojure.set :as set])
-  (:require [clojure.data.priority-map :refer [priority-map, priority-map-by]])
   (:require [quil.core :as q])
   (:gen-class))
 
@@ -223,8 +224,8 @@
   (let [{shapes :shapes
          start  :start
          goal   :goal} (nth environments (- choice 1))
-        w (Integer/parseInt (prompt-read "Enter the initial weight (w0)"))
-        dw (Integer/parseInt (prompt-read "Enter the change in weight (dw)"))
+        w (edn/read-string (prompt-read "Enter the initial weight (w0)"))
+        dw (edn/read-string (prompt-read "Enter the change in weight (dw)"))
         path (ARA* shapes start goal w dw)]
     (if (nil? path)
       (println "No path found")
@@ -243,7 +244,7 @@
 (defn -main []
   (loop []
     (let [prompt "Select an environment (1-2) or -1 to quit"
-          choice (Integer/parseInt (prompt-read prompt))]
+          choice (edn/read-string (prompt-read prompt))]
       (cond (<= 1 choice 2) (do (process choice) (recur))
             (= choice -1) (println "Goodbye!")
             :else (recur)))))
