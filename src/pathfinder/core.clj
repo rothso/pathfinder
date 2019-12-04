@@ -123,6 +123,8 @@
               (merge came-from (zipmap (keys g-score') (repeat current))) ;; update path to neighbor
               (merge-with min g-score g-score'))))))))      ;; update the g-scores with best scores
 
+(defn cost [path]
+  (reduce + (map #(apply distance %) (partition 2 1 (map second path)))))
 
 (defn ARA*-improve [shapes start goal G w]
   (loop [open-list (priority-map start (* w (h start goal)))
@@ -146,12 +148,25 @@
           (if (= goal current)
             (loop [current goal path []]
               (if (= current nil)
-                (reverse path)
+                [open-list (reverse path)]                  ;; pass the state of the open-list back
                 (recur (get came-from current) (conj path current))))
             (recur
               (into (pop open-list) f-score')               ;; add improved neighbors to open list
               (merge came-from (zipmap (keys g-score') (repeat current))) ;; update path to neighbor
               (merge-with min g-score g-score'))))))))      ;; update the g-scores with best scores
+
+(defn ARA* [shapes start goal w0 dw]
+  (loop [open-list (priority-map start (* w0 (h start goal)))
+         incumbent nil
+         G ##Inf
+         w w0]
+    (if (not (empty? open-list))
+      (let [new-solution (ARA*-improve shapes start goal G w)]
+        (if (some? new-solution)
+          (let [[open-list' path] new-solution]
+            (recur open-list' path (cost path) (- w dw)))
+          incumbent))
+      incumbent)))
 
 (defn scale [x y]
   [(* x 20) (- (q/height) (* y 20))])
@@ -208,9 +223,9 @@
   (let [{shapes :shapes
          start  :start
          goal   :goal} (nth environments (- choice 1))
-        G (Integer/parseInt (prompt-read "Enter the cost (G)"))
-        w (Integer/parseInt (prompt-read "Enter the weight (w)"))
-        path (ARA*-improve shapes start goal G w)]
+        w (Integer/parseInt (prompt-read "Enter the initial weight (w0)"))
+        dw (Integer/parseInt (prompt-read "Enter the change in weight (dw)"))
+        path (ARA* shapes start goal w dw)]
     (if (nil? path)
       (println "No path found")
       (do
