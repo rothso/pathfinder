@@ -123,6 +123,36 @@
               (merge came-from (zipmap (keys g-score') (repeat current))) ;; update path to neighbor
               (merge-with min g-score g-score'))))))))      ;; update the g-scores with best scores
 
+
+(defn ARA*-improve [shapes start goal G w]
+  (loop [open-list (priority-map start (* w (h start goal)))
+         came-from {}
+         g-score (assoc (zipmap (search-space shapes goal) (repeat ##Inf)) start 0)]
+    (when (not (empty? open-list))
+      (let [current (key (peek open-list))
+            neighbors (->> current                          ;; get all successors
+                           (get-visible-vertices shapes goal)
+                           (filter (comp not (partial contains? open-list))))
+            g-score' (->> neighbors                         ;; get improved g-scores of neighbors
+                          (map #(g (get g-score current) current %))
+                          (zipmap neighbors)
+                          (filter #(< (val %) (g-score (key %))))
+                          (into {}))
+            f-score' (->> g-score'
+                          (filter #(< (+ (val %) (h (key %) goal)) G)) ;; only if g(n') + h(n') < G
+                          (into {})
+                          (update-map #(+ %2 (* w (h %1 goal)))))]
+        (if (<= (val (peek open-list)) G)                   ;; fw(n) >= G, no path found, return nil
+          (if (= goal current)
+            (loop [current goal path []]
+              (if (= current nil)
+                (reverse path)
+                (recur (get came-from current) (conj path current))))
+            (recur
+              (into (pop open-list) f-score')               ;; add improved neighbors to open list
+              (merge came-from (zipmap (keys g-score') (repeat current))) ;; update path to neighbor
+              (merge-with min g-score g-score'))))))))      ;; update the g-scores with best scores
+
 (defn scale [x y]
   [(* x 20) (- (q/height) (* y 20))])
 
@@ -178,8 +208,9 @@
   (let [{shapes :shapes
          start  :start
          goal   :goal} (nth environments (- choice 1))
-        cost (Integer/parseInt (prompt-read "Enter the cost (C)"))
-        path (potential-search shapes start goal cost)]
+        G (Integer/parseInt (prompt-read "Enter the cost (G)"))
+        w (Integer/parseInt (prompt-read "Enter the weight (w)"))
+        path (ARA*-improve shapes start goal G w)]
     (if (nil? path)
       (println "No path found")
       (do
@@ -191,7 +222,8 @@
           :size [800 400]
           :renderer :p2d
           :draw #(do (draw shapes start goal path)
-                     (q/save (str "PTS_Rothanak_So_" choice ".png"))))))))
+                     ;(q/save (str "PTS_Rothanak_So_" choice ".png"))
+                     ))))))
 
 (defn -main []
   (loop []
