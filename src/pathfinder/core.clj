@@ -1,6 +1,7 @@
 (ns pathfinder.core
   (:require [clojure.data.priority-map :refer [priority-map, priority-map-by]])
   (:require [clojure.edn :as edn])
+  (:require [clojure.math.combinatorics :as combo])
   (:require [clojure.math.numeric-tower :as math])
   (:require [clojure.set :as set])
   (:require [quil.core :as q])
@@ -64,7 +65,7 @@
   (distance (second n) (second goal)))
 
 (defn g [current-travelled from to]
-  (+ current-travelled (distance (second from) (second to))))
+  (+ current-travelled (distance from to)))
 
 (defn A* [shapes start goal]
   (loop [open-list (priority-map start (h start goal))
@@ -77,7 +78,7 @@
                            (get-visible-vertices shapes goal)
                            (filter (comp not (partial contains? closed-list))))
             g-score' (->> neighbors                         ;; get improved g-scores of neighbors
-                          (map #(g (get g-score current) current %))
+                          (map #(g (second (get g-score current)) (second current) %))
                           (zipmap neighbors)
                           (filter #(< (val %) (g-score (key %))))
                           (into {}))
@@ -107,7 +108,7 @@
                            (get-visible-vertices shapes goal)
                            (filter (comp not (partial contains? closed-list))))
             g-score' (->> neighbors                         ;; get improved g-scores of neighbors
-                          (map #(g (get g-score current) current %))
+                          (map #(g (second (get g-score current)) (second current) %))
                           (zipmap neighbors)
                           (filter #(< (val %) (g-score (key %))))
                           (into {}))
@@ -125,16 +126,25 @@
               (merge-with min g-score g-score'))))))))      ;; update the g-scores with best scores
 
 (defn cost [path]
-  (reduce + (map #(apply distance %) (partition 2 1 (map second path)))))
+  ;(reduce + (map #(apply distance %) (partition 2 1 (map second path)))))
+  (reduce + (map #(apply distance %) (partition 2 1 path))))
 
-(defn ARA*-improve [shapes start goal G w]
-  (loop [open-list (priority-map start (* w (h start goal)))
+(defn get-manhattan-neighbors [[x y]]
+  (list [(+ x 1) y]
+        [(- x 1) y]
+        [x (+ y 1)]
+        [x (- y 1)]))
+
+(defn ARA*-improve [n obs start goal G w]
+  (loop [open-list (priority-map start (* w (distance start goal)))
          came-from {}
-         g-score (assoc (zipmap (search-space shapes goal) (repeat ##Inf)) start 0)]
+         g-score (assoc (zipmap (combo/cartesian-product (range n) (range n)) (repeat ##Inf)) start 0)]
     (when (not (empty? open-list))
       (let [current (key (peek open-list))
             neighbors (->> current                          ;; get all successors
-                           (get-visible-vertices shapes goal)
+                           (get-manhattan-neighbors)
+                           (filter (fn [[x y]] (and (<= 0 x (- n 1)) (<= 0 y (- n 1)))))
+                           (filter (comp not (partial contains? obs)))
                            (filter (comp not (partial contains? open-list))))
             g-score' (->> neighbors                         ;; get improved g-scores of neighbors
                           (map #(g (get g-score current) current %))
@@ -142,9 +152,9 @@
                           (filter #(< (val %) (g-score (key %))))
                           (into {}))
             f-score' (->> g-score'
-                          (filter #(< (+ (val %) (h (key %) goal)) G)) ;; only if g(n') + h(n') < G
+                          (filter #(< (+ (val %) (distance (key %) goal)) G)) ;; only if g(n') + h(n') < G
                           (into {})
-                          (update-map #(+ %2 (* w (h %1 goal)))))]
+                          (update-map #(+ %2 (* w (distance %1 goal)))))]
         (if (<= (val (peek open-list)) G)                   ;; fw(n) >= G, no path found, return nil
           (if (= goal current)
             (loop [current goal path []]
@@ -156,13 +166,13 @@
               (merge came-from (zipmap (keys g-score') (repeat current))) ;; update path to neighbor
               (merge-with min g-score g-score'))))))))      ;; update the g-scores with best scores
 
-(defn ARA* [shapes start goal w0 dw]
-  (loop [open-list (priority-map start (* w0 (h start goal)))
+(defn ARA* [n obs start goal w0 dw]
+  (loop [open-list (priority-map start (* w0 (distance start goal)))
          incumbent nil
          G ##Inf
          w w0]
     (if (not (empty? open-list))
-      (let [new-solution (ARA*-improve shapes start goal G w)]
+      (let [new-solution (ARA*-improve n obs start goal G w)]
         (if (some? new-solution)
           (let [[open-list' path] new-solution]
             (recur open-list' path (cost path) (- w dw)))
@@ -226,7 +236,7 @@
          goal   :goal} (nth environments (- choice 1))
         w (edn/read-string (prompt-read "Enter the initial weight (w0)"))
         dw (edn/read-string (prompt-read "Enter the change in weight (dw)"))
-        path (ARA* shapes start goal w dw)]
+        path (ARA* 100 shapes start goal w dw)]
     (if (nil? path)
       (println "No path found")
       (do
@@ -248,3 +258,35 @@
       (cond (<= 1 choice 2) (do (process choice) (recur))
             (= choice -1) (println "Goodbye!")
             :else (recur)))))
+
+(defn draw-grid [path obs [start-x start-y] [goal-x goal-y] w]
+  (q/background 255)                                        ; background color
+  (q/stroke 255)                                            ; cell border color
+  (q/fill 255 0 0)
+  (doseq [[x y] path]
+    (q/rect (* w x) (* w y) w w 2))
+  (q/fill 0)
+  (doseq [[x y] obs]
+    (q/rect (* w x) (* w y) w w 2))
+  (q/fill 0 255 0)
+  (q/rect (* w start-x) (* w start-y) w w 2)
+  (q/fill 0 0 255)
+  (q/rect (* w goal-x) (* w goal-y) w w 2))
+
+(defn -main []
+  (let [resolution 1000
+        n (edn/read-string (prompt-read "Enter the grid height/width (n)"))
+        p (edn/read-string (prompt-read "Enter the obstacle density (p)"))
+        w 0.8
+        dw 0.2
+        start [0 0]
+        goal [(- n 1) (- n 1)]
+        ;obs (set/difference (set (map (fn [_] [(rand-int n) (rand-int n)]) (range (* n n p)))) #{start goal})
+        obs (set (map (fn [_] [(+ (rand-int (- n 1)) 1) (+ (rand-int (- n 1)) 1)]) (range (* n n p))))
+        path (ARA* n obs start goal w dw)]
+    (println path)
+    (println (cost path))
+    (q/sketch
+      :title "HELP"
+      :size [resolution resolution]
+      :draw #(draw-grid path obs start goal (/ resolution n)))))
