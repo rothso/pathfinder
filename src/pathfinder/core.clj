@@ -274,19 +274,20 @@
   (q/rect (* w goal-x) (* w goal-y) w w 2))
 
 (defn -main []
-  (let [resolution 1000
-        n (edn/read-string (prompt-read "Enter the grid height/width (n)"))
-        p (edn/read-string (prompt-read "Enter the obstacle density (p)"))
-        w 0.8
-        dw 0.2
-        start [0 0]
-        goal [(- n 1) (- n 1)]
-        ;obs (set/difference (set (map (fn [_] [(rand-int n) (rand-int n)]) (range (* n n p)))) #{start goal})
-        obs (set (map (fn [_] [(+ (rand-int (- n 1)) 1) (+ (rand-int (- n 1)) 1)]) (range (* n n p))))
-        path (ARA* n obs start goal w dw)]
-    (println path)
-    (println (cost path))
-    (q/sketch
-      :title "HELP"
-      :size [resolution resolution]
-      :draw #(draw-grid path obs start goal (/ resolution n)))))
+  (loop []
+    (let [resolution 1000
+         n (edn/read-string (prompt-read "Enter the grid height/width (n)"))
+         p (edn/read-string (prompt-read "Enter the obstacle density (p)"))
+         w 0.8
+         dw 0.2
+         start [0 0]
+         goal [(- n 1) (- n 1)]
+         obs (set/difference (set (map (fn [_] [(rand-int n) (rand-int n)]) (range (* n n p)))) #{start goal})
+         path (time (ARA* n obs start goal w dw))]
+     ;(println path)
+     ;(println (cost path))
+     (q/sketch
+       :title "ARA*"
+       :size [resolution resolution]
+       :draw #(draw-grid path obs start goal (/ resolution n))))
+    (recur)))
